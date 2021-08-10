@@ -23,20 +23,42 @@ Test:
 '''
 
 class VirtualModemHandler(SocketServer.BaseRequestHandler):
+    def __init__(self, *args, **kw):
+        self.bufferd = b''
+        self.registers = [0] * 256
+        self.echo_mode = True
+        SocketServer.BaseRequestHandler.__init__(self, *args, **kw)
+
     def handle(self):
         print '==== Handle Start ===='
+        no_more_data = False
         while(True):
-            raw_data = self.request.recv(4096)
-            if not raw_data:
+            data = self.request.recv(4096)
+            if not data:
+                no_more_data = True
+            self.bufferd += data
+            while True:
+                ri = self.bufferd.find(b'\r')
+                if ri >= 0:
+                    cmd = self.bufferd[:ri]
+                    self.bufferd = self.bufferd[ri+1:]
+                elif no_more_data:
+                    cmd = self.bufferd
+                    self.bufferd = b''
+                else:
+                    break
+                if not cmd:
+                    continue
+                res = self.dispatch_command(cmd)
+                self.request.sendall('{}\r'.format(res))
+            if no_more_data:
                 break
-            data = raw_data#.strip()
-            print '{}|{}'.format(len(data), repr(data))
-            if len(data) == 0:
-                res = ''
-            else:
-                res = 0
-            self.request.sendall('{}\r'.format(res))
         print '====  Handle End  ===='
+    
+    def dispatch_command(self, cmd):
+        res = 0
+        print '{}|{}'.format(repr(cmd), repr(res))
+        return res
 
 
 if __name__ == '__main__':
