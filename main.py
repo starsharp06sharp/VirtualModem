@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import SocketServer
+import socketserver
 
 '''
 Test:
@@ -22,15 +22,16 @@ Test:
 ====  Handle End  ====
 '''
 
-class VirtualModemHandler(SocketServer.BaseRequestHandler):
+
+class VirtualModemHandler(socketserver.BaseRequestHandler):
     def __init__(self, *args, **kw):
         self.bufferd = b''
         self.registers = [0] * 256
         self.echo_mode = True
-        SocketServer.BaseRequestHandler.__init__(self, *args, **kw)
+        super().__init__(*args, **kw)
 
     def handle(self):
-        print '==== Handle Start ===='
+        print('==== Handle Start ====')
         no_more_data = False
         while(True):
             data = self.request.recv(4096)
@@ -50,18 +51,18 @@ class VirtualModemHandler(SocketServer.BaseRequestHandler):
                 if not cmd:
                     continue
                 res = self.dispatch_command(cmd)
-                self.request.sendall('{}\r'.format(res))
+                self.request.sendall(res + b'\r')
             if no_more_data:
                 break
-        print '====  Handle End  ===='
+        print('====  Handle End  ====')
     
     def dispatch_command(self, cmd):
-        res = 0
-        print '{}|{}'.format(repr(cmd), repr(res))
+        res = b'0'
+        print('{}|{}'.format(repr(cmd), repr(res)))
         return res
 
 
 if __name__ == '__main__':
     HOST, PORT = "localhost", 9999
-    server = SocketServer.TCPServer((HOST, PORT), VirtualModemHandler)
+    server = socketserver.TCPServer((HOST, PORT), VirtualModemHandler)
     server.serve_forever()
