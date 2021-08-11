@@ -9,7 +9,7 @@ import config
 
 sel = selectors.DefaultSelector()
 modems = []
-phone2id = {}
+phone2modem = {}
 
 
 class Mode(Enum):
@@ -113,28 +113,28 @@ class Modem(object):
     def virtual_connect(self, phone) -> bool:
         # find remote modem
         try:
-            to_id = phone2id[phone]
-            to_m = modems[to_id]
-        except (KeyError, IndexError):
-            return False
+            to_m = phone2modem[phone]
+        except KeyError:
+            raise ValueError(f'unkown phone {phone}')
         # check both modem is activated and idle
         if self.remote_modem or to_m.remote_modem:
-            return False
+            raise RuntimeError('modem is deactivated')
         if not self.conn or not to_m.conn:
-            return False
+            raise RuntimeError('already got connected')
         # create virtual link
         self.remote_modem = to_m
         to_m.remote_modem = self
         to_m.send_buffer = b''
-        return True
+        # TODO: ring remote_modem's bell
+        # TODO: make virtual connection establishing
 
     def push_to_remote(self, package):
         if not self.remote_modem:
-            return False
+            raise RuntimeError('no remote modem')
         if not self.remote_modem.conn:
-            return False
+            raise RuntimeError('remote modem not activated')
+        print(f'{self.id}>{self.remote_modem.id}|{repr(package)}')
         self.remote_modem.send_buffer += package
-        return True
 
     def close_conn(self):
         print(f'====== Modem{self.id} End ======')
@@ -151,15 +151,17 @@ class Modem(object):
         while self.recv_buffer:
             if self.mode == Mode.DATA:
                 pindex = self.recv_buffer.find(b'+++')
-                if rindex >= 0:
+                if pindex >= 0:
                     package = self.recv_buffer[:pindex]
-                    self.recv_buffer = self.recv_buffer[rindex+3:]
+                    self.recv_buffer = self.recv_buffer[pindex+3:]
                     self.mode = Mode.CMD
                 else:
                     package = self.recv_buffer
                     self.recv_buffer = b''
-                ok = self.push_to_remote(package)
-                if not ok:
+                try:
+                    self.push_to_remote(package)
+                except BaseException as e:
+                    print(f'push data to remote failed:{e}')
                     self.close_conn()
             else:
                 rindex = self.recv_buffer.find(b'\r')
@@ -194,16 +196,20 @@ class Modem(object):
         # P for 'Pulse dial', T for 'Tone dial'
         elif cmd.startswith(b'ATDT') or cmd.startswith(b'ATDP'):
             phone_number = cmd[4:].decode('ascii')
-            ok = self.virtual_connect(phone_number)
-            if not ok:
-                print(f'Dial to {phone_number} failed.')
+            try:
+                self.virtual_connect(phone_number)
+            except BaseException as e:
+                print(f'Dial to {phone_number} failed: {e}')
                 res = 7
             else:
                 self.mode = Mode.DATA
                 res = 66
+        elif cmd == b'ATA':
+            # TODO: set virtual connection status established
+            self.mode = Mode.DATA
 
         res = translate_resp(self.resp_mode, cmd, res)
-        print(f'{repr(cmd)}|{repr(res)}')
+        print(f'{self.id}|{repr(cmd)}|{repr(res)}')
         return res
 
     def try_send_data(self):
@@ -235,12 +241,12 @@ def main():
         # register modem object
         sel.register(sock, selectors.EVENT_READ, create_accept_func(m))
         modems.append(m)
-        phone2id[modem_cfg['phone']] = id
+        phone2modem[modem_cfg['phone']] = m
         id += 1
 
     # mian loop
     while True:
-        events = sel.select()
+        events = sel.select(1)
         # handle events
         for key, mask in events:
             callback = key.data
