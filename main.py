@@ -25,6 +25,7 @@ Test:
 ====  Handle End  ====
 '''
 
+
 class Mode(Enum):
     CMD = 0
     DATA = 1
@@ -35,7 +36,8 @@ class RespMode(Enum):
     CODE = 0
     MSG = 1
 
-code_msg_dict = defaultdict(lambda:b'UNKNOWN RETCODE', {
+
+code_msg_dict = defaultdict(lambda: b'UNKNOWN RETCODE', {
     0: b'OK',
     1: b'RING',
     3: b'NO CARRIER',
@@ -87,6 +89,7 @@ code_msg_dict = defaultdict(lambda:b'UNKNOWN RETCODE', {
     66: b'CONNECT 33600',
 })
 
+
 def translate_resp(mode, cmd, res):
     if isinstance(res, bytes):
         return res
@@ -105,7 +108,7 @@ class VirtualModemHandler(socketserver.BaseRequestHandler):
         self.bufferd = b''
         self.clear_status()
         super().__init__(*args, **kw)
-    
+
     def clear_status(self):
         self.mode = Mode.CMD
         self.resp_mode = RespMode.MSG
@@ -148,7 +151,7 @@ class VirtualModemHandler(socketserver.BaseRequestHandler):
             if no_more_data:
                 break
         print('====  Handle End  ====')
-    
+
     def dispatch_command(self, cmd):
         res = 0
         if cmd == b'ATE1':
@@ -167,7 +170,8 @@ class VirtualModemHandler(socketserver.BaseRequestHandler):
                 # Store
                 value = expr[1]
                 self.registers[reg_index] = value
-        elif cmd.startswith(b'ATDT') or cmd.startswith(b'ATDP'): # P for 'Pulse dial', T for 'Tone dial'
+        # P for 'Pulse dial', T for 'Tone dial'
+        elif cmd.startswith(b'ATDT') or cmd.startswith(b'ATDP'):
             phone_number = cmd[4:].decode('ascii')
             print('Dial to {}'.format(phone_number))
             try:
@@ -178,7 +182,7 @@ class VirtualModemHandler(socketserver.BaseRequestHandler):
             else:
                 self.mode = Mode.DATA
                 res = 66
-        
+
         res = translate_resp(self.resp_mode, cmd, res)
         print('{}|{}'.format(repr(cmd), repr(res)))
         return res
