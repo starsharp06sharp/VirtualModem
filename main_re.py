@@ -23,6 +23,11 @@ class RespMode(Enum):
     MSG = 1
 
 
+class VConnState(Enum):
+    CONNECTING = 0
+    CONNECTED = 1
+    CLOSED = 2
+
 code_msg_dict = defaultdict(lambda: b'UNKNOWN RETCODE', {
     0: b'OK',
     1: b'RING',
@@ -89,6 +94,31 @@ def translate_resp(mode, cmd, res):
     return cmd
 
 
+class VirtualConnection(object):
+    def __init__(self, m1, m2):
+        super().__init__()
+        self.modems = (m1, m2)
+        self.data = [b'', b'']
+        self.status = VConnState.CONNECTING
+    
+    def push_data(self, cur_modem, data):
+        for i in range(len(self.modems)):
+            if self.modems[i].id != cur_modem.id:
+                print(f'{cur_modem.id}>{self.modems[i].id}|{repr(data)}')
+                self.data[i] += data
+                return
+    
+    def fetch_data(self, cur_modem):
+        for i in range(len(self.modems)):
+            if self.modems[i].id != cur_modem.id:
+                if not self.data[i]:
+                    return b''
+                data = self.data[i]
+                self.data[i] = b''
+                return data
+        return b''
+
+
 class Modem(object):
     def __init__(self, id, phone, bps):
         super().__init__()
@@ -97,7 +127,7 @@ class Modem(object):
         self.bps = bps
         self.conn = None
         self.recv_buffer = b''
-        self.send_buffer = b''
+        self.virtual_conn = None
         self.clear_status()
 
     def set_conn(self, conn):
@@ -108,7 +138,10 @@ class Modem(object):
         self.mode = Mode.CMD
         self.resp_mode = RespMode.MSG
         self.registers = [0] * 256
-        self.remote_modem = None
+        # make virtual_conn half closed
+        if self.virtual_conn:
+            self.virtual_conn.status = VConnState.CLOSED
+        self.virtual_conn = None
 
     def virtual_connect(self, phone) -> bool:
         # find remote modem
@@ -117,24 +150,15 @@ class Modem(object):
         except KeyError:
             raise ValueError(f'unkown phone {phone}')
         # check both modem is activated and idle
-        if self.remote_modem or to_m.remote_modem:
-            raise RuntimeError('modem is deactivated')
         if not self.conn or not to_m.conn:
+            raise RuntimeError('modem is deactivated')
+        if self.virtual_conn or to_m.virtual_conn:
             raise RuntimeError('already got connected')
-        # create virtual link
-        self.remote_modem = to_m
-        to_m.remote_modem = self
-        to_m.send_buffer = b''
+        # create virtual connection
+        self.virtual_conn = VirtualConnection(self, to_m)
+        to_m.virtual_conn = self.virtual_conn
         # TODO: ring remote_modem's bell
         # TODO: make virtual connection establishing
-
-    def push_to_remote(self, package):
-        if not self.remote_modem:
-            raise RuntimeError('no remote modem')
-        if not self.remote_modem.conn:
-            raise RuntimeError('remote modem not activated')
-        print(f'{self.id}>{self.remote_modem.id}|{repr(package)}')
-        self.remote_modem.send_buffer += package
 
     def close_conn(self):
         print(f'====== Modem{self.id} End ======')
@@ -158,11 +182,8 @@ class Modem(object):
                 else:
                     package = self.recv_buffer
                     self.recv_buffer = b''
-                try:
-                    self.push_to_remote(package)
-                except BaseException as e:
-                    print(f'push data to remote failed:{e}')
-                    self.close_conn()
+                self.virtual_conn.push_data(self, package)
+
             else:
                 rindex = self.recv_buffer.find(b'\r')
                 if rindex >= 0:
@@ -202,11 +223,16 @@ class Modem(object):
                 print(f'Dial to {phone_number} failed: {e}')
                 res = 7
             else:
+                # TODO: do this until self.virtual_conn.status == VConnState.CLOSED 
                 self.mode = Mode.DATA
                 res = 66
         elif cmd == b'ATA':
-            # TODO: set virtual connection status established
-            self.mode = Mode.DATA
+            if self.virtual_conn.status != VConnState.CLOSED:
+                self.virtual_conn.status = VConnState.CONNECTED
+                self.mode = Mode.DATA
+            else:
+                self.virtual_conn = None
+                res = 8
 
         res = translate_resp(self.resp_mode, cmd, res)
         print(f'{self.id}|{repr(cmd)}|{repr(res)}')
@@ -217,10 +243,15 @@ class Modem(object):
             return
         if self.mode != Mode.DATA:
             return
-        if not self.send_buffer:
+        if not self.virtual_conn:
             return
-        self.conn.sendall(self.send_buffer)
-        self.send_buffer = b''
+        data = self.virtual_conn.fetch_data(self)
+        if data:
+            print(f'{self.id}:{repr(data)}') # TODO: WTF? sendall doesnt work
+            self.conn.sendall(data)
+        # close this virtual_conn completely when half closed by remote
+        if self.virtual_conn.status == VConnState.CLOSED:
+            self.virtual_conn = None
 
 
 def create_accept_func(m):
@@ -254,6 +285,7 @@ def main():
         # send data
         for m in modems:
             m.try_send_data()
+        # TODO: deal with CONNECTING virtual_conn (RING the bell)
 
 
 if __name__ == '__main__':
