@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import socket
 import selectors
+import socket
+import time
 from collections import defaultdict
 from enum import Enum
 import config
@@ -27,6 +28,7 @@ class VConnState(Enum):
     CONNECTING = 0
     CONNECTED = 1
     CLOSED = 2
+
 
 code_msg_dict = defaultdict(lambda: b'UNKNOWN RETCODE', {
     0: b'OK',
@@ -100,7 +102,7 @@ class VirtualConnection(object):
         self.modems = (m1, m2)
         self.data = [b'', b'']
         self.status = VConnState.CONNECTING
-    
+
     def push_data(self, cur_modem, data):
         '''push data to remote modem'''
         for i in range(len(self.modems)):
@@ -109,7 +111,7 @@ class VirtualConnection(object):
             print(f'{cur_modem.id}>{self.modems[i].id}|{repr(data)}')
             self.data[i] += data
             return
-    
+
     def fetch_data(self, cur_modem):
         '''fetch pushed data'''
         for i in range(len(self.modems)):
@@ -145,6 +147,7 @@ class Modem(object):
         if self.virtual_conn:
             self.virtual_conn.status = VConnState.CLOSED
         self.virtual_conn = None
+        self.dialing = False
 
     def virtual_connect(self, phone) -> bool:
         # find remote modem
@@ -160,8 +163,6 @@ class Modem(object):
         # create virtual connection
         self.virtual_conn = VirtualConnection(self, to_m)
         to_m.virtual_conn = self.virtual_conn
-        # TODO: ring remote_modem's bell
-        # TODO: make virtual connection establishing
 
     def close_conn(self):
         print(f'====== Modem{self.id} End ======')
@@ -169,13 +170,27 @@ class Modem(object):
         self.conn.close()
         self.conn = None
 
-    def recv_data(self, conn):
+    def recv_from_com(self, conn):
         data = self.conn.recv(4096)
         if not data:
             self.close_conn()
             return
         self.recv_buffer += data
         while self.recv_buffer:
+            # FIXME: dirty implementation, refactor it by asyncio
+            if self.dialing:
+                if self.virtual_conn.status == VConnState.CONNECTED:
+                    self.dialing = False
+                    self.mode = Mode.DATA
+                    self.conn.sendall(translate_resp(
+                        self.resp_mode, b'OK', 66))
+                elif self.virtual_conn.status == VConnState.CLOSED:
+                    self.dialing = False
+                    self.conn.sendall(translate_resp(
+                        self.resp_mode, b'BUSY', 7))
+                else:
+                    time.sleep(0.1)
+                    return
             if self.mode == Mode.DATA:
                 pindex = self.recv_buffer.find(b'+++')
                 if pindex >= 0:
@@ -198,8 +213,9 @@ class Modem(object):
                     break
                 if not cmd:
                     continue
-                res = self.dispatch_command(cmd) + b'\r'
-                self.conn.sendall(res)
+                res = self.dispatch_command(cmd)
+                if res != -1:
+                    self.conn.sendall(res + b'\r')
 
     def dispatch_command(self, cmd):
         res = 0
@@ -228,9 +244,8 @@ class Modem(object):
                 print(f'Dial to {phone_number} failed: {e}')
                 res = 7
             else:
-                # TODO: do this until self.virtual_conn.status == VConnState.CLOSED 
-                self.mode = Mode.DATA
-                res = 66
+                self.dialing = True
+                res = -1
         elif cmd == b'ATA':
             if self.virtual_conn.status != VConnState.CLOSED:
                 self.virtual_conn.status = VConnState.CONNECTED
@@ -238,16 +253,49 @@ class Modem(object):
             else:
                 self.virtual_conn = None
                 res = 8
+        elif cmd == b'ATH':
+            if self.virtual_conn:
+                # disable in one way
+                self.virtual_conn.status = VConnState.CLOSED
+                self.virtual_conn = None
 
-        res = translate_resp(self.resp_mode, cmd, res)
+
+        if res != -1:
+            res = translate_resp(self.resp_mode, cmd, res)
         print(f'{self.id}|{repr(cmd)}|{repr(res)}')
         return res
 
-    def try_send_data(self):
+    def try_send2com(self):
         if not self.conn:
             return
-        if self.mode != Mode.DATA:
+        if self.mode == Mode.DATA:
+            return self.try_send_data()
+        elif self.mode == Mode.CMD:
+            return self.try_ring_the_bell()
+
+    def try_ring_the_bell(self):
+        if not self.virtual_conn:
             return
+        # Calling from remote
+        if not self.dialing and self.virtual_conn.status == VConnState.CONNECTING:
+            print(f'>{self.id}|RING')
+            self.conn.sendall(b'RING\r')
+            return
+        # FIXME: dirty implementation, refactor it by asyncio
+        if self.dialing:
+            if self.virtual_conn.status == VConnState.CONNECTED:
+                self.dialing = False
+                self.mode = Mode.DATA
+                print(f'{self.id}<|CONNECT')
+                self.conn.sendall(translate_resp(
+                    self.resp_mode, b'CONNECT', 66))
+            elif self.virtual_conn.status == VConnState.CLOSED:
+                self.dialing = False
+                print(f'{self.id}<|BUSY')
+                self.conn.sendall(translate_resp(
+                    self.resp_mode, b'BUSY', 7))
+
+    def try_send_data(self):
         if not self.virtual_conn:
             return
         data = self.virtual_conn.fetch_data(self)
@@ -263,7 +311,7 @@ def create_accept_func(m):
         print(f'====== Modem{m.id} Start ======')
         conn, addr = sock.accept()
         m.set_conn(conn)
-        sel.register(conn, selectors.EVENT_READ, m.recv_data)
+        sel.register(conn, selectors.EVENT_READ, m.recv_from_com)
     return accept_fun
 
 
@@ -280,16 +328,24 @@ def main():
         id += 1
 
     # mian loop
+    select_timeout = 1
     while True:
-        events = sel.select(1)
-        # handle events
+        events = sel.select(select_timeout)
+        mid_data_comes = set()
+        # Read data from COM
         for key, mask in events:
             callback = key.data
             callback(key.fileobj)
-        # send data
+            if hasattr(callback, '__self__'):
+                mid_data_comes.add(callback.__self__.id)
+
+        # Send data to COM
         for m in modems:
-            m.try_send_data()
-        # TODO: deal with CONNECTING virtual_conn (RING the bell)
+            m.try_send2com()
+        if events:
+            select_timeout = 0
+        else:
+            select_timeout = 1
 
 
 if __name__ == '__main__':
