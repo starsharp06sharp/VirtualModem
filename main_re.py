@@ -102,15 +102,18 @@ class VirtualConnection(object):
         self.status = VConnState.CONNECTING
     
     def push_data(self, cur_modem, data):
+        '''push data to remote modem'''
         for i in range(len(self.modems)):
-            if self.modems[i].id != cur_modem.id:
-                print(f'{cur_modem.id}>{self.modems[i].id}|{repr(data)}')
-                self.data[i] += data
-                return
+            if self.modems[i].id == cur_modem.id:
+                continue
+            print(f'{cur_modem.id}>{self.modems[i].id}|{repr(data)}')
+            self.data[i] += data
+            return
     
     def fetch_data(self, cur_modem):
+        '''fetch pushed data'''
         for i in range(len(self.modems)):
-            if self.modems[i].id != cur_modem.id:
+            if self.modems[i].id == cur_modem.id:
                 if not self.data[i]:
                     return b''
                 data = self.data[i]
@@ -182,6 +185,8 @@ class Modem(object):
                 else:
                     package = self.recv_buffer
                     self.recv_buffer = b''
+                if not package:
+                    continue
                 self.virtual_conn.push_data(self, package)
 
             else:
@@ -247,7 +252,6 @@ class Modem(object):
             return
         data = self.virtual_conn.fetch_data(self)
         if data:
-            print(f'{self.id}:{repr(data)}') # TODO: WTF? sendall doesnt work
             self.conn.sendall(data)
         # close this virtual_conn completely when half closed by remote
         if self.virtual_conn.status == VConnState.CLOSED:
