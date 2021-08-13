@@ -3,23 +3,25 @@
 import asyncio
 
 import config
-from common import MsgType, QueueMessage, phone2modem
+from common import MsgType, QueueMessage, phone2modem, logger
 from modem import Modem
 
 
-async def read_to_queue_loop(reader, queue):
+async def read_to_queue_loop(id, reader, queue):
     while True:
         data = await reader.read(4096)
+        logger.info(f'>{id} {data!r}')
         if not data:
             return
         msg = QueueMessage(MsgType.ComData, data)
         await queue.put(msg)
 
 
-async def write_from_queue_loop(queue, writer):
+async def write_from_queue_loop(id, queue, writer):
     try:
         while True:
             data = await queue.get()
+            logger.info(f'<{id} {data!r}')
             writer.write(data)
             await writer.drain()
     except asyncio.CancelledError:
@@ -34,8 +36,8 @@ def create_handler(m: Modem):
         print(f'======  Modem{m.id} activated  ======')
         assert not m.activated
         m.activated = True
-        read_task = asyncio.create_task(read_to_queue_loop(reader, m.msg_recvq))
-        write_task = asyncio.create_task(write_from_queue_loop(m.com_sendq, writer))
+        read_task = asyncio.create_task(read_to_queue_loop(m.id, reader, m.msg_recvq))
+        write_task = asyncio.create_task(write_from_queue_loop(m.id, m.com_sendq, writer))
         await read_task
         write_task.cancel()
         m.activated = False
