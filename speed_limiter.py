@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from datetime import datetime
+import asyncio
 import random
-import time
+from datetime import datetime
+
 
 class SpeedLimiter(object):
     def __init__(self, bps):
@@ -21,7 +22,7 @@ class SpeedLimiter(object):
             [expanded_window_bytes] * expanded_window_num
         random.shuffle(self.window_tmpl)
         self.bytes_left = self.window_tmpl.copy()
-    
+
     def try_reduce_window_at(self, tms, byte_count):
         ts = int(tms / 1000)
         if self.ts != ts:
@@ -34,8 +35,8 @@ class SpeedLimiter(object):
             self.bytes_left[ms] = 0
             return left_byte
         return 0
-    
-    def simulate_send_delay(self, byte_count):
+
+    async def simulate_send_delay(self, byte_count):
         tms = int(datetime.now().timestamp() * 1000)
         sleep_to_tms = tms - 1
         while byte_count > 0:
@@ -44,4 +45,4 @@ class SpeedLimiter(object):
         if sleep_to_tms > tms:
             sleep_time = datetime.now().timestamp() - tms / 1000
             if sleep_time > 0:
-                time.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
