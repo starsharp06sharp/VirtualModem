@@ -13,7 +13,7 @@ class SpeedLimiter(object):
         '''
         super().__init__()
         self.ts = int(datetime.now().timestamp())
-        byte_ps = bps / 8
+        byte_ps = round(bps / 8)
         normal_window_bytes = int(byte_ps / 1000)
         expanded_window_bytes = normal_window_bytes + 1
         expanded_window_num = int(byte_ps) - normal_window_bytes * 1000

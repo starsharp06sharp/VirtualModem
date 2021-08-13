@@ -3,8 +3,7 @@
 import asyncio
 
 from cmd_processor import dispatch_command
-from common import (Mode, MsgType, QueueMessage, RespMode, VConnEventType,
-                    VConnState, phone2modem)
+from common import Mode, MsgType, VConnEventType, VConnState
 from virtual_connection import VirtualConnection
 
 
@@ -51,7 +50,10 @@ class Modem(object):
                     self.mode = Mode.CMD
             else:
                 if msg.type == MsgType.ComData:
-                    res = await dispatch_command(self, msg.data)
+                    cmd = msg.data.strip()
+                    if not cmd:
+                        continue
+                    res = await dispatch_command(self, cmd)
                     if res:
                         await self.com_sendq.put(res)
                     # if transferred to data mode, check if there is a buffered data
@@ -67,4 +69,4 @@ class Modem(object):
                         print(
                             f'{self.id}|Remote close connection during CMD mode')
                     else:
-                        self.com_sendq.put(b'RING\r')
+                        await self.com_sendq.put(b'RING\r')

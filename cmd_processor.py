@@ -3,6 +3,7 @@
 import asyncio
 
 from common import Mode, VConnState, phone2modem
+from virtual_connection import VirtualConnection
 
 
 async def ATE(modem, cmd) -> bytes:
@@ -37,25 +38,25 @@ async def ATA(modem, cmd) -> bytes:
 
 async def ATH(modem, cmd) -> bytes:
     if modem.vconn:
-        await modem.vconn.close()
+        await modem.vconn.close(modem)
     return b'OK'
 
 
-def build_vconn(modem, phone):
+def build_vconn(from_m, to_phone):
     # find remote modem
     try:
-        to_m = phone2modem[phone]
+        to_m = phone2modem[to_phone]
     except KeyError:
-        raise ValueError(f'unkown phone {phone}')
+        raise ValueError(f'unkown phone {to_phone}')
     # check both modem is activated and idle
-    if not self.activated or not to_m.activated:
+    if not from_m.activated or not to_m.activated:
         raise RuntimeError('modem is deactivated')
-    if self.vconn or to_m.vconn:
+    if from_m.vconn or to_m.vconn:
         raise RuntimeError('modem is busy line')
     # create virtual connection
-    self.vconn = VirtualConnection(self, to_m)
-    to_m.vconn = self.vconn
-    return self.vconn
+    from_m.vconn = VirtualConnection(from_m, to_m)
+    to_m.vconn = from_m.vconn
+    return from_m.vconn
 
 
 def cancel_vconn(vconn):
@@ -72,7 +73,7 @@ async def ATD(modem, cmd) -> bytes:
         return b'BUSY'
 
     try:
-        ok = await asyncio.wait_for(asyncio.shield(vconn.dial()), 3)
+        ok = await asyncio.wait_for(asyncio.shield(vconn.dial(modem)), 3)
     except asyncio.TimeoutError:
         cancel_vconn(vconn)
         print(f'{modem.id}|Dial to {phone_number} failed: timeout')
@@ -82,6 +83,7 @@ async def ATD(modem, cmd) -> bytes:
         print(f'{modem.id}|Dial to {phone_number} failed: refused by remote')
         return b'BUSY'
 
+    modem.mode = Mode.DATA
     return f'CONNECT {modem.vconn.bps}'.encode('ascii')
 
 
@@ -99,11 +101,11 @@ cmd2func = [
 
 async def dispatch_command(modem, cmd) -> bytes:
     global cmd2func
-    assert cmd.startswith(b'AT')
-
     for prefix, func in cmd2func:
         if cmd.startswith(prefix):
             return await func(modem, cmd) + b'\r'
-    # Unknown command
-    print(f'{modem.id}|Unknown cmd:{repr(cmd)}')
+
+    if cmd != b'AT':
+        # Unknown command
+        print(f'{modem.id}|Unknown cmd:{cmd!r}')
     return b'OK\r'
