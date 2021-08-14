@@ -43,6 +43,6 @@ class SpeedLimiter(object):
             sleep_to_tms += 1
             byte_count = self.try_reduce_window_at(sleep_to_tms, byte_count)
         if sleep_to_tms > tms:
-            sleep_time = datetime.now().timestamp() - tms / 1000
+            sleep_time = sleep_to_tms / 1000 - datetime.now().timestamp()
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
