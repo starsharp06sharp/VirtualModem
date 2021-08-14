@@ -105,7 +105,7 @@ class Modem(object):
                 await asyncio.sleep(1)
                 msg = QueueMessage(MsgType.EndDataModeEvent, b'')
                 await self.msg_recvq.put(msg)
-            asyncio.create_task(send_check_msg_asecond_later)
+            asyncio.create_task(send_check_msg_asecond_later())
             return
 
         await self.vconn.push_data(self, self.data_recv_buffer)
