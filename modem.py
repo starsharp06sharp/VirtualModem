@@ -3,7 +3,8 @@
 import asyncio
 
 from cmd_processor import dispatch_command
-from common import Mode, MsgType, VConnEventType, VConnState, clear_queue
+from common import (Mode, MsgType, QueueMessage, VConnEventType, VConnState,
+                    clear_queue)
 
 
 class Modem(object):
@@ -22,6 +23,7 @@ class Modem(object):
         self.mode = Mode.CMD
         self.registers = [0] * 256
         self.cmd_recv_buffer = b''
+        self.data_recv_buffer = b''
         clear_queue(self.msg_recvq)
         clear_queue(self.com_sendq)
         # buffer for data received from the remote in CMD mode
@@ -36,14 +38,11 @@ class Modem(object):
             msg = await self.msg_recvq.get()
             if self.mode == Mode.DATA:
                 if msg.type == MsgType.ComData:
-                    # b'+++': escape to command mode
-                    # The escape sequence was preceded and followed by one second of silence
-                    if msg.data == b'+++':
-                        self.mode = Mode.CMD
-                    else:
-                        await self.vconn.push_data(self, msg.data)
+                    await self.handle_com_data(msg.data)
                 elif msg.type == MsgType.VConnData:
                     await self.com_sendq.put(msg.data)
+                elif msg.type == MsgType.EndDataModeEvent:
+                    await self.try_end_data_mode()
                 else:
                     assert msg.type == MsgType.VConnEvent
                     assert msg.data == VConnEventType.HANG
@@ -63,7 +62,7 @@ class Modem(object):
                             f'{self.id}|Remote close connection during CMD mode')
                     else:
                         await self.com_sendq.put(b'RING\r')
-    
+
     async def handle_at_command(self, data):
         self.cmd_recv_buffer += data
         while True:
@@ -83,3 +82,31 @@ class Modem(object):
                 self.bufferd_send_data = b''
                 self.cmd_recv_buffer = b''
                 break
+    
+    async def try_end_data_mode(self):
+        if not self.data_recv_buffer:
+            return
+        # are still the escape sequence after one second
+        if self.data_recv_buffer == b'+++':
+            print(f'{self.id}|Return to CMD mode')
+            self.mode = Mode.CMD
+        else:
+            await self.vconn.push_data(self, self.data_recv_buffer)
+            self.data_recv_buffer = b''
+
+    async def handle_com_data(self, data):
+        self.data_recv_buffer += data
+        # b'+++': escape to command mode
+        # The escape sequence was preceded and followed by one second of silence
+        if self.data_recv_buffer in {b'+', b'++'}:
+            return
+        if self.data_recv_buffer == b'+++':
+            async def send_check_msg_asecond_later():
+                await asyncio.sleep(1)
+                msg = QueueMessage(MsgType.EndDataModeEvent, b'')
+                await self.msg_recvq.put(msg)
+            asyncio.create_task(send_check_msg_asecond_later)
+            return
+
+        await self.vconn.push_data(self, self.data_recv_buffer)
+        self.data_recv_buffer = b''

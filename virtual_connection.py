@@ -40,11 +40,11 @@ class VirtualConnection(object):
                 await asyncio.wait_for(self.dial_answered.wait(), 1)
                 return self.status == VConnState.CONNECTED
             except asyncio.TimeoutError:
-                print(f'RING modem{self.modems[ri].id} {times+1}times, NOT ANSWERED.')
+                print(
+                    f'{cur_modem.id}|RING modem{self.modems[ri].id} {times+1}times, NOT ANSWERED')
         # time out
         self.dial_answered.clear()
         raise TimeoutError()
-        
 
     def answer(self):
         self.status = VConnState.CONNECTED
@@ -52,6 +52,8 @@ class VirtualConnection(object):
         return
 
     async def close(self, cur_modem):
+        print(
+            f'{cur_modem.id}|Hang up the connection from modem{self.modems[0].id} to modem{self.modems[1].id}')
         ri = self._get_remote_modem_index(cur_modem)
         self.status = VConnState.CLOSED
         msg = QueueMessage(MsgType.VConnEvent, VConnEventType.HANG)

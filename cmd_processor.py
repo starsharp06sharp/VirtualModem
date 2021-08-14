@@ -86,6 +86,7 @@ async def ATD(modem, cmd) -> bytes:
         print(f'{modem.id}|Dial to {phone_number} failed: refused by remote')
         return b'BUSY'
 
+    print(f'{modem.id}|Dial to {phone_number} success: {modem.vconn.bps}bps')
     modem.mode = Mode.DATA
     return f'CONNECT {modem.vconn.bps}'.encode('ascii')
 
