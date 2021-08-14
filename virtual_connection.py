@@ -32,11 +32,19 @@ class VirtualConnection(object):
 
     async def dial(self, cur_modem) -> bool:
         ri = self._get_remote_modem_index(cur_modem)
-        msg = QueueMessage(MsgType.VConnEvent, VConnEventType.DIAL)
-        await self.modems[ri].msg_recvq.put(msg)
-        await self.dial_answered.wait()
+        for times in range(5):
+            # send RING message every second
+            msg = QueueMessage(MsgType.VConnEvent, VConnEventType.DIAL)
+            await self.modems[ri].msg_recvq.put(msg)
+            try:
+                await asyncio.wait_for(self.dial_answered.wait(), 1)
+                return self.status == VConnState.CONNECTED
+            except asyncio.TimeoutError:
+                print(f'RING modem{self.modems[ri].id} {times+1}times, NOT ANSWERED.')
+        # time out
         self.dial_answered.clear()
-        return self.status == VConnState.CONNECTED
+        raise TimeoutError()
+        
 
     def answer(self):
         self.status = VConnState.CONNECTED

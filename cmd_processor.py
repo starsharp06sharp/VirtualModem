@@ -48,6 +48,9 @@ def build_vconn(from_m, to_phone):
         to_m = phone2modem[to_phone]
     except KeyError:
         raise ValueError(f'unkown phone {to_phone}')
+    # cant call yourself
+    if from_m.id == to_m.id:
+        raise ValueError('cant call yourself')
     # check both modem is activated and idle
     if not from_m.activated or not to_m.activated:
         raise RuntimeError('modem is deactivated')
@@ -73,8 +76,8 @@ async def ATD(modem, cmd) -> bytes:
         return b'BUSY'
 
     try:
-        ok = await asyncio.wait_for(asyncio.shield(vconn.dial(modem)), 3)
-    except asyncio.TimeoutError:
+        ok = await vconn.dial(modem)
+    except TimeoutError:
         cancel_vconn(vconn)
         print(f'{modem.id}|Dial to {phone_number} failed: timeout')
         return b'NO ANSWER'

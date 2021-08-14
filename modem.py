@@ -21,6 +21,7 @@ class Modem(object):
     def clear_status(self):
         self.mode = Mode.CMD
         self.registers = [0] * 256
+        self.cmd_recv_buffer = b''
         clear_queue(self.msg_recvq)
         clear_queue(self.com_sendq)
         # buffer for data received from the remote in CMD mode
@@ -51,16 +52,7 @@ class Modem(object):
                     self.mode = Mode.CMD
             else:
                 if msg.type == MsgType.ComData:
-                    cmd = msg.data.strip()
-                    if not cmd:
-                        continue
-                    res = await dispatch_command(self, cmd)
-                    if res:
-                        await self.com_sendq.put(res)
-                    # if transferred to data mode, check if there is a buffered data
-                    if self.mode == Mode.DATA and self.bufferd_send_data:
-                        await self.com_sendq.put(self.bufferd_send_data)
-                        self.bufferd_send_data = b''
+                    await self.handle_at_command(msg.data)
                 elif msg.type == MsgType.VConnData:
                     # CMD mode, just buffer it
                     self.bufferd_send_data += msg.data
@@ -71,3 +63,23 @@ class Modem(object):
                             f'{self.id}|Remote close connection during CMD mode')
                     else:
                         await self.com_sendq.put(b'RING\r')
+    
+    async def handle_at_command(self, data):
+        self.cmd_recv_buffer += data
+        while True:
+            ri = self.cmd_recv_buffer.find(b'\r')
+            if ri < 0:
+                break
+            cmd = self.cmd_recv_buffer[:ri].strip()
+            self.cmd_recv_buffer = self.cmd_recv_buffer[ri+1:]
+            if not cmd:
+                continue
+            res = await dispatch_command(self, cmd)
+            if res:
+                await self.com_sendq.put(res)
+            # if transferred to data mode, check if there is a buffered data
+            if self.mode == Mode.DATA and self.bufferd_send_data:
+                await self.com_sendq.put(self.bufferd_send_data)
+                self.bufferd_send_data = b''
+                self.cmd_recv_buffer = b''
+                break
