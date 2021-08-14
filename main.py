@@ -3,7 +3,7 @@
 import asyncio
 
 import config
-from common import MsgType, QueueMessage, phone2modem, logger
+from common import MsgType, QueueMessage, logger, phone2modem
 from modem import Modem
 
 
@@ -24,8 +24,6 @@ async def write_from_queue_loop(id, queue, writer):
             logger.info(f'<{id} {data!r}')
             writer.write(data)
             await writer.drain()
-    except asyncio.CancelledError:
-        pass
     finally:
         writer.close()
         await writer.wait_closed()

@@ -3,8 +3,7 @@
 import asyncio
 
 from cmd_processor import dispatch_command
-from common import Mode, MsgType, VConnEventType, VConnState
-from virtual_connection import VirtualConnection
+from common import Mode, MsgType, VConnEventType, VConnState, clear_queue
 
 
 class Modem(object):
@@ -14,14 +13,16 @@ class Modem(object):
         self.phone = phone
         self.bps = bps
         self.activated = False
+        self.msg_recvq = asyncio.Queue()
+        self.com_sendq = asyncio.Queue()
         self.vconn = None
         self.clear_status()
 
     def clear_status(self):
         self.mode = Mode.CMD
         self.registers = [0] * 256
-        self.msg_recvq = asyncio.Queue()
-        self.com_sendq = asyncio.Queue()
+        clear_queue(self.msg_recvq)
+        clear_queue(self.com_sendq)
         # buffer for data received from the remote in CMD mode
         self.bufferd_send_data = b''
         # make virtual connection half closed
@@ -46,7 +47,7 @@ class Modem(object):
                     assert msg.type == MsgType.VConnEvent
                     assert msg.data == VConnEventType.HANG
                     self.vconn = None
-                    self.com_sendq.put(b'NO CARRIER\r')
+                    await self.com_sendq.put(b'NO CARRIER\r')
                     self.mode = Mode.CMD
             else:
                 if msg.type == MsgType.ComData:

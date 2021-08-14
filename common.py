@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
+import asyncio
 import logging
 import logging.handlers
 from collections import namedtuple
@@ -49,3 +50,11 @@ support_bps = {
     33600,
     56000,
 }
+
+
+def clear_queue(q: asyncio.Queue):
+    while True:
+        try:
+            q.get_nowait()
+        except asyncio.QueueEmpty:
+            return
