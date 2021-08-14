@@ -5,15 +5,16 @@ import logging
 import logging.handlers
 from collections import namedtuple
 from enum import Enum
+import config
 
 fileHandler = logging.handlers.RotatingFileHandler(
     'log/network.log', encoding='utf-8', maxBytes=16*1024*1024, backupCount=9)
-fileHandler.setLevel(logging.DEBUG)
+fileHandler.setLevel(config.log_level)
 fileHandler.setFormatter(logging.Formatter(
     u'%(asctime)s|%(levelname)s|%(filename)s|%(lineno)3d:%(message)s'))
 
 logger = logging.getLogger('logger')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(config.log_level)
 logger.addHandler(fileHandler)
 
 
@@ -31,6 +32,7 @@ class MsgType(Enum):
     ComData = 0
     VConnData = 1
     VConnEvent = 2
+    EndDataModeEvent = 3
 
 class VConnEventType(Enum):
     DIAL = 0

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import logging
+
+log_level = logging.ERROR
 
 modems = [
     {
