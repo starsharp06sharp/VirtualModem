@@ -34,8 +34,10 @@ def create_handler(m: Modem):
         print(f'======  Modem{m.id} activated  ======')
         assert not m.activated
         m.activated = True
-        read_task = asyncio.create_task(read_to_queue_loop(m.id, reader, m.msg_recvq))
-        write_task = asyncio.create_task(write_from_queue_loop(m.id, m.com_sendq, writer))
+        read_task = asyncio.create_task(
+            read_to_queue_loop(m.id, reader, m.msg_recvq))
+        write_task = asyncio.create_task(
+            write_from_queue_loop(m.id, m.com_sendq, writer))
         await read_task
         write_task.cancel()
         m.activated = False

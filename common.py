@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 from collections import namedtuple
 from enum import Enum
+
 import config
 
 fileHandler = logging.handlers.RotatingFileHandler(
@@ -28,15 +29,18 @@ class VConnState(Enum):
     CONNECTED = 1
     CLOSED = 2
 
+
 class MsgType(Enum):
     ComData = 0
     VConnData = 1
     VConnEvent = 2
     EndDataModeEvent = 3
 
+
 class VConnEventType(Enum):
     DIAL = 0
     HANG = 1
+
 
 QueueMessage = namedtuple('QueueMessage', ('type', 'data'))
 

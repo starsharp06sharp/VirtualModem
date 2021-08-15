@@ -82,7 +82,7 @@ class Modem(object):
                 self.bufferd_send_data = b''
                 self.cmd_recv_buffer = b''
                 break
-    
+
     async def try_end_data_mode(self):
         if not self.data_recv_buffer:
             return
