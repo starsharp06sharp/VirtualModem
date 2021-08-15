@@ -49,6 +49,8 @@ class Modem(object):
                     self.vconn = None
                     await self.com_sendq.put(b'NO CARRIER\r')
                     self.mode = Mode.CMD
+                    print(
+                        f'{self.id}|Remote close connection during DATA mode')
             else:
                 if msg.type == MsgType.ComData:
                     await self.handle_at_command(msg.data)
@@ -58,6 +60,8 @@ class Modem(object):
                 else:
                     assert msg.type == MsgType.VConnEvent
                     if msg.data == VConnEventType.HANG:
+                        self.vconn = None
+                        await self.com_sendq.put(b'NO CARRIER\r')
                         print(
                             f'{self.id}|Remote close connection during CMD mode')
                     else:
