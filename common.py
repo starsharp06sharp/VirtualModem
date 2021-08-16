@@ -32,9 +32,14 @@ class VConnState(Enum):
 
 class MsgType(Enum):
     ComData = 0
-    VConnData = 1
-    VConnEvent = 2
-    EndDataModeEvent = 3
+    ComEvent = 1
+    VConnData = 2
+    VConnEvent = 3
+
+
+class CommEventType(Enum):
+    PortPowerOff = 0
+    DataModeSeemsEnd = 1
 
 
 class VConnEventType(Enum):

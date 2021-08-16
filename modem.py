@@ -3,8 +3,8 @@
 import asyncio
 
 from cmd_processor import dispatch_command
-from common import (Mode, MsgType, QueueMessage, VConnEventType, VConnState,
-                    clear_queue)
+from common import (CommEventType, Mode, MsgType, QueueMessage, VConnEventType,
+                    VConnState, clear_queue)
 
 
 class Modem(object):
@@ -41,8 +41,8 @@ class Modem(object):
                     await self.handle_com_data(msg.data)
                 elif msg.type == MsgType.VConnData:
                     await self.com_sendq.put(msg.data)
-                elif msg.type == MsgType.EndDataModeEvent:
-                    await self.try_end_data_mode()
+                elif msg.type == MsgType.ComEvent:
+                    await self.handle_com_event(msg.data)
                 else:
                     assert msg.type == MsgType.VConnEvent
                     assert msg.data == VConnEventType.HANG
@@ -57,6 +57,8 @@ class Modem(object):
                 elif msg.type == MsgType.VConnData:
                     # CMD mode, just buffer it
                     self.bufferd_send_data += msg.data
+                elif msg.type == MsgType.ComEvent:
+                    await self.handle_com_event(msg.data)
                 else:
                     assert msg.type == MsgType.VConnEvent
                     if msg.data == VConnEventType.HANG:
@@ -87,6 +89,18 @@ class Modem(object):
                 self.cmd_recv_buffer = b''
                 break
 
+    async def handle_com_event(self, data):
+        if data == CommEventType.DataModeSeemsEnd:
+            if self.mode == Mode.DATA:
+                await self.try_end_data_mode()
+            else:
+                print(f'{self.id}|DATA mode has already ended')
+        else:
+            assert data == CommEventType.PortPowerOff
+            if self.mode == Mode.DATA:
+                print(f'{self.id}|PC power off on data mode')
+            self.clear_status()
+
     async def try_end_data_mode(self):
         if not self.data_recv_buffer:
             return
@@ -108,7 +122,8 @@ class Modem(object):
         if self.data_recv_buffer == b'+++':
             async def send_check_msg_asecond_later():
                 await asyncio.sleep(0.5)
-                msg = QueueMessage(MsgType.EndDataModeEvent, b'')
+                msg = QueueMessage(
+                    MsgType.ComEvent, CommEventType.DataModeSeemsEnd)
                 await self.msg_recvq.put(msg)
             asyncio.create_task(send_check_msg_asecond_later())
             return

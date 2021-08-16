@@ -3,7 +3,7 @@
 import asyncio
 
 import config
-from common import MsgType, QueueMessage, logger, phone2modem
+from common import CommEventType, MsgType, QueueMessage, logger, phone2modem
 from modem import Modem
 
 
@@ -39,9 +39,9 @@ def create_handler(m: Modem):
         write_task = asyncio.create_task(
             write_from_queue_loop(m.id, m.com_sendq, writer))
         await read_task
+        await m.msg_recvq.put(QueueMessage(MsgType.ComEvent, CommEventType.PortPowerOff))
         write_task.cancel()
         m.activated = False
-        m.clear_status()
         print(f'====== Modem{m.id} deactivated ======')
     return handle_read_write
 
