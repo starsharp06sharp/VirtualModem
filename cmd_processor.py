@@ -42,6 +42,13 @@ async def ATH(modem, cmd) -> bytes:
     return b'OK'
 
 
+async def ATO(modem, cmd) -> bytes:
+    if not modem.vconn:
+        return b'NO CARRIER'
+    modem.mode = Mode.DATA
+    return f'CARRIER {modem.vconn.bps}'.encode('ascii')
+
+
 def build_vconn(from_m, to_phone):
     # find remote modem
     try:
@@ -96,7 +103,7 @@ cmd2func = [
     (b'ATS', ATS),
     (b'ATA', ATA),
     (b'ATH', ATH),
-    # TODO: ATO 没有链接时注意报错
+    (b'ATO', ATO),
     # P for 'Pulse dial', T for 'Tone dial'
     (b'ATDP', ATD),
     (b'ATDT', ATD),
