@@ -94,6 +94,7 @@ class Modem(object):
         if self.data_recv_buffer == b'+++':
             print(f'{self.id}|Return to CMD mode')
             self.mode = Mode.CMD
+            await self.com_sendq.put(b'OK\r')
         else:
             await self.vconn.push_data(self, self.data_recv_buffer)
             self.data_recv_buffer = b''
@@ -106,7 +107,7 @@ class Modem(object):
             return
         if self.data_recv_buffer == b'+++':
             async def send_check_msg_asecond_later():
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 msg = QueueMessage(MsgType.EndDataModeEvent, b'')
                 await self.msg_recvq.put(msg)
             asyncio.create_task(send_check_msg_asecond_later())
