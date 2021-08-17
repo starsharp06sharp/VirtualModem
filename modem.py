@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import traceback
 
 from cmd_processor import dispatch_command
 from common import (CommEventType, Mode, MsgType, QueueMessage, VConnEventType,
@@ -35,39 +36,48 @@ class Modem(object):
 
     async def main_loop(self):
         while True:
-            msg = await self.msg_recvq.get()
-            if self.mode == Mode.DATA:
-                if msg.type == MsgType.ComData:
-                    await self.handle_com_data(msg.data)
-                elif msg.type == MsgType.VConnData:
-                    await self.com_sendq.put(msg.data)
-                elif msg.type == MsgType.ComEvent:
-                    await self.handle_com_event(msg.data)
-                else:
-                    assert msg.type == MsgType.VConnEvent
-                    assert msg.data == VConnEventType.HANG
+            try:
+                msg = await self.msg_recvq.get()
+                await self.process_msg(msg)
+            except asyncio.CancelledError:
+                return
+            except BaseException:
+                print('Exception in main_loop:')
+                traceback.print_exc()
+
+    async def process_msg(self, msg):
+        if self.mode == Mode.DATA:
+            if msg.type == MsgType.ComData:
+                await self.handle_com_data(msg.data)
+            elif msg.type == MsgType.VConnData:
+                await self.com_sendq.put(msg.data)
+            elif msg.type == MsgType.ComEvent:
+                await self.handle_com_event(msg.data)
+            else:
+                assert msg.type == MsgType.VConnEvent
+                assert msg.data == VConnEventType.HANG
+                self.vconn = None
+                await self.com_sendq.put(b'NO CARRIER\r')
+                self.mode = Mode.CMD
+                print(
+                    f'{self.id}|Remote close connection during DATA mode')
+        else:
+            if msg.type == MsgType.ComData:
+                await self.handle_at_command(msg.data)
+            elif msg.type == MsgType.VConnData:
+                # CMD mode, just buffer it
+                self.bufferd_send_data += msg.data
+            elif msg.type == MsgType.ComEvent:
+                await self.handle_com_event(msg.data)
+            else:
+                assert msg.type == MsgType.VConnEvent
+                if msg.data == VConnEventType.HANG:
                     self.vconn = None
                     await self.com_sendq.put(b'NO CARRIER\r')
-                    self.mode = Mode.CMD
                     print(
-                        f'{self.id}|Remote close connection during DATA mode')
-            else:
-                if msg.type == MsgType.ComData:
-                    await self.handle_at_command(msg.data)
-                elif msg.type == MsgType.VConnData:
-                    # CMD mode, just buffer it
-                    self.bufferd_send_data += msg.data
-                elif msg.type == MsgType.ComEvent:
-                    await self.handle_com_event(msg.data)
+                        f'{self.id}|Remote close connection during CMD mode')
                 else:
-                    assert msg.type == MsgType.VConnEvent
-                    if msg.data == VConnEventType.HANG:
-                        self.vconn = None
-                        await self.com_sendq.put(b'NO CARRIER\r')
-                        print(
-                            f'{self.id}|Remote close connection during CMD mode')
-                    else:
-                        await self.com_sendq.put(b'RING\r')
+                    await self.com_sendq.put(b'RING\r')
 
     async def handle_at_command(self, data):
         self.cmd_recv_buffer += data
