@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
+import sound
 from common import MsgType, QueueMessage, VConnEventType, VConnState
 from speed_limiter import SpeedLimiter
 
@@ -33,11 +34,12 @@ class VirtualConnection(object):
     async def dial(self, cur_modem) -> bool:
         ri = self._get_remote_modem_index(cur_modem)
         for times in range(5):
-            # send RING message every second
+            # send RING message every 3 second
             msg = QueueMessage(MsgType.VConnEvent, VConnEventType.DIAL)
             await self.modems[ri].msg_recvq.put(msg)
+            await sound.play_ringing_tone()
             try:
-                await asyncio.wait_for(self.dial_answered.wait(), 1)
+                await asyncio.wait_for(self.dial_answered.wait(), sound.RINGING_IDLE_SECOND)
                 return self.status == VConnState.CONNECTED
             except asyncio.TimeoutError:
                 print(

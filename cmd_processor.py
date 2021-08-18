@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
+import sound
 from common import Mode, VConnState, phone2modem
 from virtual_connection import VirtualConnection
 
@@ -76,6 +77,7 @@ def cancel_vconn(vconn):
 
 async def ATD(modem, cmd) -> bytes:
     phone_number = cmd[4:].decode('ascii')
+    await sound.play_dial_tone(phone_number)
     try:
         vconn = build_vconn(modem, phone_number)
     except BaseException as e:
@@ -93,6 +95,7 @@ async def ATD(modem, cmd) -> bytes:
         print(f'{modem.id}|Dial to {phone_number} failed: refused by remote')
         return b'BUSY'
 
+    sound.play_handshake_sound()
     print(f'{modem.id}|Dial to {phone_number} success: {modem.vconn.bps}bps')
     modem.mode = Mode.DATA
     return f'CONNECT {modem.vconn.bps}'.encode('ascii')
