@@ -8,7 +8,10 @@ import struct
 import sys
 import wave
 
-import simpleaudio as sa
+try:
+    import simpleaudio as sa
+except:
+    sa = None
 
 NUM_CHANNELS = 1
 BYTES_PER_SAMPLE = 2
@@ -72,24 +75,43 @@ DIGIT_IDLE = empty_wave(0.05)
 RINGING_TONE = superposition_sine_wave((440, 480), 1)
 RINGING_IDLE_SECOND = 2
 
+
 def play_sound_blocked(buffer):
     p = sa.play_buffer(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
     p.wait_done()
 
 
-async def play_dial_tone(phone):
-    buffer = DIGIT_IDLE.join([DIGIT_TONE[digit] for digit in phone]) + DIGIT_IDLE
+async def _play_dial_tone(phone):
+    buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
+                             for digit in phone]) + DIGIT_IDLE
     await asyncio.to_thread(play_sound_blocked, buffer)
 
 
-async def play_ringing_tone():
+async def _play_ringing_tone():
     buffer = RINGING_TONE
     await asyncio.to_thread(play_sound_blocked, buffer)
 
 
-def play_handshake_sound():
+def _play_handshake_sound():
     # TODO: play recoreded sound according to bps without waiting
     pass
+
+
+if sa:
+    play_dial_tone = _play_dial_tone
+    play_ringing_tone = _play_ringing_tone
+    play_handshake_sound = _play_handshake_sound
+
+else:
+    def _empty_func(*args, **kw):
+        pass
+
+    async def _empty_await_func(*args, **kw):
+        pass
+
+    play_dial_tone = _empty_await_func
+    play_ringing_tone = _empty_await_func
+    play_handshake_sound = _empty_func
 
 
 async def main():
