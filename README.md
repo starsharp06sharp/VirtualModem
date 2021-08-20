@@ -25,7 +25,7 @@ modems = [
         'phone': '4805698', # tel number of connected phone line
         'bps': 33600, # support bps: 300/1200/2400/4800/9600/14400/19200/28800/33600/56000
     },
-    {{  # modem 2
+    {  # modem 2
         'address': ('localhost', 8888),
         'phone': '7891234',
         'bps': 33600,
