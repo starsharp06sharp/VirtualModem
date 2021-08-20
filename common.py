@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 import asyncio
+import contextvars
+import functools
 import logging
 import logging.handlers
 from collections import namedtuple
@@ -69,3 +71,13 @@ def clear_queue(q: asyncio.Queue):
             q.get_nowait()
         except asyncio.QueueEmpty:
             return
+
+
+if hasattr(asyncio, 'to_thread'):
+    asyncio_to_thread = asyncio.to_thread
+else:
+    async def asyncio_to_thread(func, /, *args, **kwargs):
+        loop = asyncio.events.get_running_loop()
+        ctx = contextvars.copy_context()
+        func_call = functools.partial(ctx.run, func, *args, **kwargs)
+        return await loop.run_in_executor(None, func_call)

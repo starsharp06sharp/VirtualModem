@@ -8,6 +8,8 @@ import struct
 import sys
 import wave
 
+from common import asyncio_to_thread
+
 try:
     import simpleaudio as sa
 except:
@@ -84,12 +86,12 @@ def play_sound_blocked(buffer):
 async def _play_dial_tone(phone):
     buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
                              for digit in phone]) + DIGIT_IDLE
-    await asyncio.to_thread(play_sound_blocked, buffer)
+    await asyncio_to_thread(play_sound_blocked, buffer)
 
 
 async def _play_ringing_tone():
     buffer = RINGING_TONE
-    await asyncio.to_thread(play_sound_blocked, buffer)
+    await asyncio_to_thread(play_sound_blocked, buffer)
 
 
 def _play_handshake_sound():
