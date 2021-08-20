@@ -54,11 +54,12 @@ QueueMessage = namedtuple('QueueMessage', ('type', 'data'))
 phone2modem = {}
 
 support_bps = {
+    300,
+    1200,
     2400,
     4800,
     9600,
     14400,
-    19200,
     28800,
     33600,
     56000,

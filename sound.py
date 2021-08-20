@@ -78,31 +78,46 @@ RINGING_TONE = superposition_sine_wave((440, 480), 1)
 RINGING_IDLE_SECOND = 2
 
 
-def play_sound_blocked(buffer):
-    p = sa.play_buffer(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
-    p.wait_done()
-
-
-async def _play_dial_tone(phone):
-    buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
-                             for digit in phone]) + DIGIT_IDLE
-    await asyncio_to_thread(play_sound_blocked, buffer)
-
-
-async def _play_ringing_tone():
-    buffer = RINGING_TONE
-    await asyncio_to_thread(play_sound_blocked, buffer)
-
-
-def _play_handshake_sound():
-    # TODO: play recoreded sound according to bps without waiting
-    pass
-
-
 if sa:
-    play_dial_tone = _play_dial_tone
-    play_ringing_tone = _play_ringing_tone
-    play_handshake_sound = _play_handshake_sound
+    def play_sound_blocked(buffer):
+        p = sa.play_buffer(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
+        p.wait_done()
+
+    async def play_dial_tone(phone):
+        global DIGIT_IDLE, DIGIT_TONE
+        buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
+                                  for digit in phone]) + DIGIT_IDLE
+        await asyncio_to_thread(play_sound_blocked, buffer)
+
+    async def play_ringing_tone():
+        global RINGING_TONE
+        buffer = RINGING_TONE
+        await asyncio_to_thread(play_sound_blocked, buffer)
+
+    BELL103_SOUND = sa.WaveObject.from_wave_file('./sound/bell103.wav')
+    V22_SOUND = sa.WaveObject.from_wave_file('./sound/v22.wav')
+    V32_SOUND = sa.WaveObject.from_wave_file('./sound/v32.wav')
+    V34_SOUND = sa.WaveObject.from_wave_file('./sound/v34.wav')
+    V90_SOUND = sa.WaveObject.from_wave_file('./sound/v90.wav')
+    HANDSHAKE_SOUND = {
+        300: BELL103_SOUND,
+        1200: V22_SOUND,
+        2400: V22_SOUND,
+        4800: V32_SOUND,  # TODO: may be another sound? v.27?
+        9600: V32_SOUND,
+        14400: V32_SOUND,
+        28800: V34_SOUND,
+        33600: V34_SOUND,
+        56000: V90_SOUND,
+    }
+
+    def play_handshake_sound(bps):
+        global HANDSHAKE_SOUND
+        try:
+            wo = HANDSHAKE_SOUND[bps]
+            wo.play()
+        except KeyError:
+            print(f'Handshake sound not found, unknown bps:{bps}')
 
 else:
     def _empty_func(*args, **kw):
