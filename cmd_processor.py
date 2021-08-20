@@ -95,7 +95,7 @@ async def ATD(modem, cmd) -> bytes:
         print(f'{modem.id}|Dial to {phone_number} failed: refused by remote')
         return b'BUSY'
 
-    sound.play_handshake_sound()
+    await sound.play_handshake_sound(vconn.bps)
     print(f'{modem.id}|Dial to {phone_number} success: {modem.vconn.bps}bps')
     modem.mode = Mode.DATA
     return f'CONNECT {modem.vconn.bps}'.encode('ascii')

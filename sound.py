@@ -79,20 +79,22 @@ RINGING_IDLE_SECOND = 2
 
 
 if sa:
-    def play_sound_blocked(buffer):
-        p = sa.play_buffer(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
+    def play_sound_blocked(wo: sa.WaveObject):
+        p = wo.play()
         p.wait_done()
 
     async def play_dial_tone(phone):
         global DIGIT_IDLE, DIGIT_TONE
         buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
                                   for digit in phone]) + DIGIT_IDLE
-        await asyncio_to_thread(play_sound_blocked, buffer)
+        wo = sa.WaveObject(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
+        await asyncio_to_thread(play_sound_blocked, wo)
 
     async def play_ringing_tone():
         global RINGING_TONE
         buffer = RINGING_TONE
-        await asyncio_to_thread(play_sound_blocked, buffer)
+        wo = sa.WaveObject(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
+        await asyncio_to_thread(play_sound_blocked, wo)
 
     BELL103_SOUND = sa.WaveObject.from_wave_file('./sound/bell103.wav')
     V22_SOUND = sa.WaveObject.from_wave_file('./sound/v22.wav')
@@ -111,13 +113,14 @@ if sa:
         56000: V90_SOUND,
     }
 
-    def play_handshake_sound(bps):
+    async def play_handshake_sound(bps):
         global HANDSHAKE_SOUND
         try:
             wo = HANDSHAKE_SOUND[bps]
-            wo.play()
         except KeyError:
             print(f'Handshake sound not found, unknown bps:{bps}')
+        else:
+            await asyncio_to_thread(play_sound_blocked, wo)
 
 else:
     def _empty_func(*args, **kw):
