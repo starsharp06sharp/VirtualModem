@@ -18,7 +18,7 @@ import logging
 
 log_level = logging.ERROR # LogLevel
 
-# you can dial-up to any modem in the host system
+# you can dial-up to any modem in the guest system
 modems = [
     {  # modem 1
         'address': ('localhost', 9999),
