@@ -72,6 +72,9 @@ DIGIT_TONE = {
     '0': superposition_sine_wave((941, 1336), 0.1),
     '#': superposition_sine_wave((941, 1477), 0.1),
     'D': superposition_sine_wave((941, 1633), 0.1),
+
+    '-': empty_wave(0.1),
+    ' ': empty_wave(0.1),
 }
 DIGIT_IDLE = empty_wave(0.05)
 RINGING_TONE = superposition_sine_wave((440, 480), 1)
