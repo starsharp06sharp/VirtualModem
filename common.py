@@ -82,3 +82,14 @@ else:
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
         return await loop.run_in_executor(None, func_call)
+
+
+async def start_namedpipe_server(client_connected_cb, path=None, *, limit=2**16):
+    loop = asyncio.events.get_running_loop()
+    def factory():
+        reader = asyncio.streams.StreamReader(limit=limit, loop=loop)
+        protocol = asyncio.streams.StreamReaderProtocol(reader, client_connected_cb, loop=loop)
+        return protocol
+
+    svrs = await loop.start_serving_pipe(factory, path)
+    return svrs[0]

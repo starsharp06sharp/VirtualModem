@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
 
-log_level = logging.ERROR
+log_level = logging.DEBUG
 
 modems = [
     {
-        'address': ('localhost', 9999),
+        'address': '\\\\.\\pipe\\86Box\\W98',
         'phone': '4805698',
         'bps': 33600,
     },

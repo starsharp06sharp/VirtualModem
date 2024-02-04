@@ -3,7 +3,8 @@
 import asyncio
 
 import config
-from common import CommEventType, MsgType, QueueMessage, logger, phone2modem
+import sys
+from common import CommEventType, MsgType, QueueMessage, logger, phone2modem, start_namedpipe_server
 from modem import Modem
 
 
@@ -46,6 +47,17 @@ def create_handler(m: Modem):
     return handle_read_write
 
 
+async def create_server(handler, address):
+    if isinstance(address, (tuple, list)):
+        return await asyncio.start_server(handler, *address)
+    elif isinstance(address, str):
+        if sys.platform != 'win32':
+            return await asyncio.start_unix_server(handler, address)
+        return await start_namedpipe_server(handler, address)
+    else:
+        raise TypeError(f'Invalid address {address}')
+
+
 async def main():
     id = 0
     fibers = []
@@ -54,9 +66,11 @@ async def main():
             # create modem object
             m = Modem(id, modem_cfg['phone'], modem_cfg['bps'])
             # register modem object
-            svr = await asyncio.start_server(create_handler(m), *modem_cfg['address'])
-            await svr.__aenter__()
-            fibers.append(svr.serve_forever())
+            svr = await create_server(create_handler(m), modem_cfg['address'])
+            if hasattr(svr, '__aenter__'):
+                await svr.__aenter__()
+            if hasattr(svr, 'serve_forever'):
+                fibers.append(svr.serve_forever())
             fibers.append(m.main_loop())
             phone2modem[modem_cfg['phone']] = m
             id += 1
