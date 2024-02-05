@@ -21,7 +21,7 @@ log_level = logging.ERROR # LogLevel
 # you can dial-up to any modem in the guest system
 modems = [
     {  # modem 1
-        'address': ('localhost', 9999),
+        'address': r'\\.\pipe\86Box\Win98', # now support Windows NamedPipe / Unix Socket
         'phone': '4805698', # tel number of connected phone line
         'bps': 33600, # support bps: 300/1200/2400/4800/9600/14400/28800/33600/56000
     },

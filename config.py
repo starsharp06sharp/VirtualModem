@@ -5,7 +5,7 @@ log_level = logging.DEBUG
 
 modems = [
     {
-        'address': r'\\.\pipe\86Box\W98',
+        'address': r'\\.\pipe\86Box\Win98',
         'phone': '4805698',
         'bps': 33600,
     },
