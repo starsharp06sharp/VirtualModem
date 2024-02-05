@@ -18,7 +18,6 @@ class FakeConnServer(object):
                 await asyncio.sleep(3)
                 continue
             await self._handler(reader, writer)
-            break
 
 
 async def create_server(handler, address):

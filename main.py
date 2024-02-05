@@ -25,6 +25,8 @@ async def write_from_queue_loop(id, queue, writer):
             logger.info(f'<{id} {data!r}')
             writer.write(data)
             await writer.drain()
+    except asyncio.CancelledError:
+        pass
     finally:
         writer.close()
         await writer.wait_closed()
