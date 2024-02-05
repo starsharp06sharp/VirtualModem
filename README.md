@@ -1,7 +1,7 @@
 # VirtualModem
 
 VirtualModem is a modem emulator with sound support.
-It supports virtual COM port through TCP connection, which is supported by most emulators, such as VirtualBox, VMware and QEMU.
+It supports virtual COM port through TCP connection, which is supported by most emulators, such as VirtualBox, VMware and 86Box.
 
 ## Dependencies
 ```

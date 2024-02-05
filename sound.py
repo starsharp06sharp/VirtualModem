@@ -134,7 +134,7 @@ else:
 
     play_dial_tone = _empty_await_func
     play_ringing_tone = _empty_await_func
-    play_handshake_sound = _empty_func
+    play_handshake_sound = _empty_await_func
 
 
 async def main():
