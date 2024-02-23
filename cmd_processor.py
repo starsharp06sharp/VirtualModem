@@ -50,6 +50,14 @@ async def ATO(modem, cmd) -> bytes:
     return f'CARRIER {modem.vconn.bps}'.encode('ascii')
 
 
+async def ATZ(modem, cmd) -> bytes:
+    if modem.vconn:
+        await modem.vconn.close(modem)
+    modem.mode = Mode.CMD
+    modem.clear_registers()
+    return b'OK'
+
+
 def build_vconn(from_m, to_phone):
     # find remote modem
     try:
@@ -107,6 +115,7 @@ cmd2func = [
     (b'ATA', ATA),
     (b'ATH', ATH),
     (b'ATO', ATO),
+    (b'ATZ', ATZ),
     # P for 'Pulse dial', T for 'Tone dial'
     (b'ATDP', ATD),
     (b'ATDT', ATD),

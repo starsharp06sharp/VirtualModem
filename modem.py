@@ -22,7 +22,7 @@ class Modem(object):
 
     def clear_status(self):
         self.mode = Mode.CMD
-        self.registers = [0] * 256
+        self.clear_registers()
         self.cmd_recv_buffer = b''
         self.data_recv_buffer = b''
         clear_queue(self.msg_recvq)
@@ -33,6 +33,9 @@ class Modem(object):
         if self.vconn:
             self.vconn.status = VConnState.CLOSED
         self.vconn = None
+    
+    def clear_registers(self):
+        self.registers = [0] * 256
 
     async def main_loop(self):
         while True:
