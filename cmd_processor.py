@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import inspect
 
 import sound
 from common import Mode, VConnState, phone2modem
 from virtual_connection import VirtualConnection
 
 
-async def ATE(modem, cmd) -> bytes:
+def ATE(modem, cmd) -> bytes:
     # support text mode only
     if cmd == b'ATE0V1':
         return b'OK'
     return b'ERROR'
 
 
-async def ATS(modem, cmd) -> bytes:
+def ATS(modem, cmd) -> bytes:
     expr = list(map(int, cmd[3:].split(b'=')))
     reg_index = expr[0]
     if len(expr) == 1:
@@ -27,7 +28,7 @@ async def ATS(modem, cmd) -> bytes:
         return b'OK'
 
 
-async def ATA(modem, cmd) -> bytes:
+def ATA(modem, cmd) -> bytes:
     if modem.vconn and modem.vconn.status != VConnState.CLOSED:
         modem.vconn.answer()
         modem.mode = Mode.DATA
@@ -43,7 +44,7 @@ async def ATH(modem, cmd) -> bytes:
     return b'OK'
 
 
-async def ATO(modem, cmd) -> bytes:
+def ATO(modem, cmd) -> bytes:
     if not modem.vconn:
         return b'NO CARRIER'
     modem.mode = Mode.DATA
@@ -126,7 +127,10 @@ async def dispatch_command(modem, cmd) -> bytes:
     global cmd2func
     for prefix, func in cmd2func:
         if cmd.startswith(prefix):
-            return await func(modem, cmd) + b'\r'
+            if inspect.iscoroutinefunction(func):
+                return await func(modem, cmd) + b'\r'
+            else:
+                return func(modem, cmd) + b'\r'
 
     if cmd != b'AT':
         # Unknown command
