@@ -12,6 +12,8 @@ def ATE(modem, cmd) -> bytes:
     # support text mode only
     if cmd == b'ATE0V1':
         return b'OK'
+    if cmd == b'ATE0Q0V1':
+        return b'OK'
     return b'ERROR'
 
 
@@ -128,11 +130,12 @@ async def dispatch_command(modem, cmd) -> bytes:
     for prefix, func in cmd2func:
         if cmd.startswith(prefix):
             if inspect.iscoroutinefunction(func):
-                return await func(modem, cmd) + b'\r'
+                result = await func(modem, cmd)
             else:
-                return func(modem, cmd) + b'\r'
+                result = func(modem, cmd)
+            return b'\r\n' + result + b'\r\n'
 
     if cmd != b'AT':
         # Unknown command
         print(f'{modem.id}|Unknown cmd:{cmd!r}')
-    return b'OK\r'
+    return b'\r\nOK\r\n'

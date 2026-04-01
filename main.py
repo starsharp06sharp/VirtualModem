@@ -10,7 +10,10 @@ from modem import Modem
 
 async def read_to_queue_loop(id, reader, queue):
     while True:
-        data = await reader.read(4096)
+        try:
+            data = await reader.read(4096)
+        except OSError:
+            return
         logger.info(f'>{id} {data!r}')
         if not data:
             return
@@ -29,7 +32,10 @@ async def write_from_queue_loop(id, queue, writer):
         pass
     finally:
         writer.close()
-        await writer.wait_closed()
+        try:
+            await writer.wait_closed()
+        except OSError:
+            pass
 
 
 def create_handler(m: Modem):
