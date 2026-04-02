@@ -1,49 +1,48 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
-import audioop
 import math
-import queue
-import struct
 import sys
-import wave
+
+from pydub import AudioSegment
+from pydub.generators import Sine
+from pydub.playback import play as pydub_play
 
 from common import asyncio_to_thread
-
-try:
-    import simpleaudio as sa
-except:
-    sa = None
 
 NUM_CHANNELS = 1
 BYTES_PER_SAMPLE = 2
 SAMPLE_RATE = 8000
 
 
-def sine_wave(freq, second, volume=0.3):
-    amplitude = ((1 << 8 * BYTES_PER_SAMPLE - 1) - 1) * volume
-    omega = 2 * math.pi * freq / SAMPLE_RATE
-    num_samples = round(second * SAMPLE_RATE)
-    l = []
-    for i in range(num_samples):
-        level = round(math.sin(omega * i) * amplitude)
-        # little endian
-        l.append(struct.pack('<h', level) * NUM_CHANNELS)
-    return b''.join(l)
-
-
-def empty_wave(second):
-    num_samples = round(second * SAMPLE_RATE)
-    return b'\0' * (BYTES_PER_SAMPLE * NUM_CHANNELS * num_samples)
+def empty_wave(second) -> AudioSegment:
+    return AudioSegment.silent(
+        duration=round(second * 1000), frame_rate=SAMPLE_RATE
+    ).set_channels(NUM_CHANNELS).set_sample_width(BYTES_PER_SAMPLE)
 
 
 def superposition_sine_wave(freqs, second, volume=0.3):
     assert len(freqs) > 0
-    buf = sine_wave(freqs[0], second, volume)
+    duration_ms = round(second * 1000)
+    if volume <= 0:
+        return empty_wave(second)
+
+    gain_db = 20 * math.log10(volume)
+    segment = Sine(freqs[0], sample_rate=SAMPLE_RATE).to_audio_segment(
+        duration=duration_ms,
+        volume=gain_db,
+    )
+    segment = segment.set_channels(NUM_CHANNELS).set_sample_width(BYTES_PER_SAMPLE)
+
     for freq in freqs[1:]:
-        buf = audioop.add(buf, sine_wave(
-            freq, second, volume), BYTES_PER_SAMPLE)
-    return buf
+        tone = Sine(freq, sample_rate=SAMPLE_RATE).to_audio_segment(
+            duration=duration_ms,
+            volume=gain_db,
+        )
+        tone = tone.set_channels(NUM_CHANNELS).set_sample_width(BYTES_PER_SAMPLE)
+        segment = segment.overlay(tone)
+
+    return segment
 
 
 # DTMF: Dual-Tone Multi-Frequency
@@ -81,60 +80,49 @@ RINGING_TONE = superposition_sine_wave((440, 480), 1)
 RINGING_IDLE_SECOND = 2
 
 
-if sa:
-    def play_sound_blocked(wo: sa.WaveObject):
-        p = wo.play()
-        p.wait_done()
+def play_sound_blocked(segment: AudioSegment):
+    pydub_play(segment)
 
-    async def play_dial_tone(phone):
-        global DIGIT_IDLE, DIGIT_TONE
-        buffer = DIGIT_IDLE.join([DIGIT_TONE[digit]
-                                  for digit in phone]) + DIGIT_IDLE
-        wo = sa.WaveObject(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
-        await asyncio_to_thread(play_sound_blocked, wo)
 
-    async def play_ringing_tone():
-        global RINGING_TONE
-        buffer = RINGING_TONE
-        wo = sa.WaveObject(buffer, NUM_CHANNELS, BYTES_PER_SAMPLE, SAMPLE_RATE)
-        await asyncio_to_thread(play_sound_blocked, wo)
+async def play_dial_tone(phone):
+    segments = []
+    for digit in phone:
+        segments.append(DIGIT_TONE[digit])
+        segments.append(DIGIT_IDLE)
+    buffer = sum(segments, AudioSegment.empty())
+    await asyncio_to_thread(play_sound_blocked, buffer)
 
-    BELL103_SOUND = sa.WaveObject.from_wave_file('./sound/bell103.wav')
-    V22_SOUND = sa.WaveObject.from_wave_file('./sound/v22.wav')
-    V32_SOUND = sa.WaveObject.from_wave_file('./sound/v32.wav')
-    V34_SOUND = sa.WaveObject.from_wave_file('./sound/v34.wav')
-    V90_SOUND = sa.WaveObject.from_wave_file('./sound/v90.wav')
-    HANDSHAKE_SOUND = {
-        300: BELL103_SOUND,
-        1200: V22_SOUND,
-        2400: V22_SOUND,
-        4800: V32_SOUND,  # TODO: may be another sound? v.27?
-        9600: V32_SOUND,
-        14400: V32_SOUND,
-        28800: V34_SOUND,
-        33600: V34_SOUND,
-        56000: V90_SOUND,
-    }
 
-    async def play_handshake_sound(bps):
-        global HANDSHAKE_SOUND
-        try:
-            wo = HANDSHAKE_SOUND[bps]
-        except KeyError:
-            print(f'Handshake sound not found, unknown bps:{bps}')
-        else:
-            await asyncio_to_thread(play_sound_blocked, wo)
+async def play_ringing_tone():
+    await asyncio_to_thread(play_sound_blocked, RINGING_TONE)
 
-else:
-    def _empty_func(*args, **kw):
-        pass
 
-    async def _empty_await_func(*args, **kw):
-        pass
+BELL103_SOUND = AudioSegment.from_wav('./sound/bell103.wav')
+V22_SOUND = AudioSegment.from_wav('./sound/v22.wav')
+V32_SOUND = AudioSegment.from_wav('./sound/v32.wav')
+V34_SOUND = AudioSegment.from_wav('./sound/v34.wav')
+V90_SOUND = AudioSegment.from_wav('./sound/v90.wav')
+HANDSHAKE_SOUND = {
+    300: BELL103_SOUND,
+    1200: V22_SOUND,
+    2400: V22_SOUND,
+    4800: V32_SOUND,  # TODO: may be another sound? v.27?
+    9600: V32_SOUND,
+    14400: V32_SOUND,
+    28800: V34_SOUND,
+    33600: V34_SOUND,
+    56000: V90_SOUND,
+}
 
-    play_dial_tone = _empty_await_func
-    play_ringing_tone = _empty_await_func
-    play_handshake_sound = _empty_await_func
+
+async def play_handshake_sound(bps):
+    global HANDSHAKE_SOUND
+    try:
+        segment = HANDSHAKE_SOUND[bps]
+    except KeyError:
+        print(f'Handshake sound not found, unknown bps:{bps}')
+    else:
+        await asyncio_to_thread(play_sound_blocked, segment)
 
 
 async def main():
@@ -144,6 +132,7 @@ async def main():
         await asyncio.sleep(RINGING_IDLE_SECOND)
         await play_ringing_tone()
         await asyncio.sleep(RINGING_IDLE_SECOND)
+    await play_handshake_sound(33600)
 
     # w = wave.open('output.wav', 'wb')
     # w.setnchannels(NUM_CHANNELS)
